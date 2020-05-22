@@ -164,18 +164,6 @@ def compute_time_train(model, loss_fun):
     return fw_timer.average_time, bw_timer.average_time
 
 
-def compute_time_full(model, loss_fun):
-    """Computes precise model time for both eval and train mode."""
-    test_fw_time = compute_time_eval(model)
-    train_fw_time, train_bw_time = compute_time_train(model, loss_fun)
-    return {
-        "test_fw_time": test_fw_time,
-        "train_fw_time": train_fw_time,
-        "train_bw_time": train_bw_time,
-        "train_fw_bw_time": train_fw_time + train_bw_time,
-    }
-
-
 def drop_connect(x, drop_ratio):
     """Drop connect (adapted from DARTS)."""
     keep_ratio = 1.0 - drop_ratio

@@ -67,6 +67,39 @@ def setup_model():
     return model
 
 
+def compute_time_full(model, loss_fun, train_loader, test_loader):
+    """Times model and data loader."""
+    logger.info("Computing model and loader timings...")
+    # Compute timings
+    test_fw_time = net.compute_time_eval(model)
+    train_fw_time, train_bw_time = net.compute_time_train(model, loss_fun)
+    train_fw_bw_time = train_fw_time + train_bw_time
+    train_loader_time = loader.compute_time_loader(train_loader)
+    # Output iter timing
+    iter_times = {
+        "test_fw_time": test_fw_time,
+        "train_fw_time": train_fw_time,
+        "train_bw_time": train_bw_time,
+        "train_fw_bw_time": train_fw_bw_time,
+        "train_loader_time": train_loader_time,
+    }
+    logger.info("Iter timing stats:")
+    logger.info(logging.dump_json_stats(iter_times))
+    # Output epoch timing
+    epoch_times = {
+        "test_fw_time": test_fw_time * len(test_loader),
+        "train_fw_time": train_fw_time * len(train_loader),
+        "train_bw_time": train_bw_time * len(train_loader),
+        "train_fw_bw_time": train_fw_bw_time * len(train_loader),
+        "train_loader_time": train_loader_time * len(train_loader),
+    }
+    logger.info("Epoch timing stats:")
+    logger.info(logging.dump_json_stats(epoch_times))
+    # Compute data loader overhead
+    overhead = max(0, train_loader_time - train_fw_bw_time) / train_fw_bw_time
+    logger.info("Overhead of data loader is {:.2f}%".format(overhead * 100))
+
+
 def train_epoch(train_loader, model, loss_fun, optimizer, train_meter, cur_epoch):
     """Performs one epoch of training."""
     # Shuffle the data
@@ -151,16 +184,14 @@ def train_model():
     elif cfg.TRAIN.WEIGHTS:
         checkpoint.load_checkpoint(cfg.TRAIN.WEIGHTS, model)
         logger.info("Loaded initial weights from: {}".format(cfg.TRAIN.WEIGHTS))
-    # Compute precise time
-    if start_epoch == 0 and cfg.PREC_TIME.NUM_ITER > 0:
-        logger.info("Computing precise time...")
-        prec_time = net.compute_time_full(model, loss_fun)
-        logger.info(logging.dump_json_stats(prec_time))
     # Create data loaders and meters
     train_loader = loader.construct_train_loader()
     test_loader = loader.construct_test_loader()
     train_meter = meters.TrainMeter(len(train_loader))
     test_meter = meters.TestMeter(len(test_loader))
+    # Compute model and loader timings
+    if start_epoch == 0 and cfg.PREC_TIME.NUM_ITER > 0:
+        compute_time_full(model, loss_fun, train_loader, test_loader)
     # Perform the training loop
     logger.info("Start epoch: {}".format(start_epoch + 1))
     for cur_epoch in range(start_epoch, cfg.OPTIM.MAX_EPOCH):
@@ -196,13 +227,14 @@ def test_model():
 
 
 def time_model():
-    """Times a model."""
+    """Times model and data loader."""
     # Setup training/testing environment
     setup_env()
     # Construct the model and loss_fun
     model = setup_model()
     loss_fun = builders.build_loss_fun().cuda()
-    # Compute precise time
-    logger.info("Computing precise time...")
-    prec_time = net.compute_time_full(model, loss_fun)
-    logger.info(logging.dump_json_stats(prec_time))
+    # Create data loaders
+    train_loader = loader.construct_train_loader()
+    test_loader = loader.construct_test_loader()
+    # Compute model and loader timings
+    compute_time_full(model, loss_fun, train_loader, test_loader)

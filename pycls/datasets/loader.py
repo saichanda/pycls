@@ -11,6 +11,7 @@ import os
 
 import torch
 from pycls.core.config import cfg
+from pycls.core.timer import Timer
 from pycls.datasets.cifar10 import Cifar10
 from pycls.datasets.imagenet import ImageNet
 from torch.utils.data.distributed import DistributedSampler
@@ -80,3 +81,19 @@ def shuffle(loader, cur_epoch):
     if isinstance(loader.sampler, DistributedSampler):
         # DistributedSampler shuffles data based on epoch
         loader.sampler.set_epoch(cur_epoch)
+
+
+def compute_time_loader(loader):
+    """Computes loader time."""
+    shuffle(loader, 0)
+    timer = Timer()
+    loader_iterator = iter(loader)
+    total_iter = cfg.PREC_TIME.NUM_ITER + cfg.PREC_TIME.WARMUP_ITER
+    total_iter = min(total_iter, len(loader))
+    for cur_iter in range(total_iter):
+        if cur_iter == cfg.PREC_TIME.WARMUP_ITER:
+            timer.reset()
+        timer.tic()
+        next(loader_iterator)
+        timer.toc()
+    return timer.average_time
